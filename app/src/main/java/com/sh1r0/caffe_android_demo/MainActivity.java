@@ -1,14 +1,20 @@
 package com.sh1r0.caffe_android_demo;
 
+import android.Manifest;
 import android.app.Activity;
+import android.content.Context;
+import android.support.v4.app.ActivityCompat;
+import android.support.v7.app.AppCompatActivity;
 import android.app.ProgressDialog;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.SystemClock;
@@ -33,7 +39,8 @@ import java.util.List;
 import java.util.Scanner;
 
 
-public class MainActivity extends Activity implements CNNListener {
+public class MainActivity extends AppCompatActivity
+        implements CNNListener, ActivityCompat.OnRequestPermissionsResultCallback {
     private static final String LOG_TAG = "MainActivity";
     private static final int REQUEST_IMAGE_CAPTURE = 100;
     private static final int REQUEST_IMAGE_SELECT = 200;
@@ -56,6 +63,39 @@ public class MainActivity extends Activity implements CNNListener {
     static {
         System.loadLibrary("caffe");
         System.loadLibrary("caffe_jni");
+    }
+
+    private void initCaffe() {
+        caffeMobile = new CaffeMobile();
+        caffeMobile.setNumThreads(4);
+        caffeMobile.loadModel(modelProto, modelBinary);
+
+        float[] meanValues = {104, 117, 123};
+        caffeMobile.setMean(meanValues);
+
+        AssetManager am = this.getAssets();
+        try {
+            InputStream is = am.open("synset_words.txt");
+            Scanner sc = new Scanner(is);
+            List<String> lines = new ArrayList<String>();
+            while (sc.hasNextLine()) {
+                final String temp = sc.nextLine();
+                lines.add(temp.substring(temp.indexOf(" ") + 1));
+            }
+            IMAGENET_CLASSES = lines.toArray(new String[0]);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static final int PERMISSION_REQUEST_CODE = 1;
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            Log.v("value", "Permission is now granted!");
+            initCaffe();
+        }
     }
 
     @Override
@@ -85,27 +125,20 @@ public class MainActivity extends Activity implements CNNListener {
                 startActivityForResult(i, REQUEST_IMAGE_SELECT);
             }
         });
+        
+        // TODO: implement a splash screen(?)
 
-        // TODO: implement a splash screen(?
-        caffeMobile = new CaffeMobile();
-        caffeMobile.setNumThreads(4);
-        caffeMobile.loadModel(modelProto, modelBinary);
-
-        float[] meanValues = {104, 117, 123};
-        caffeMobile.setMean(meanValues);
-
-        AssetManager am = this.getAssets();
-        try {
-            InputStream is = am.open("synset_words.txt");
-            Scanner sc = new Scanner(is);
-            List<String> lines = new ArrayList<String>();
-            while (sc.hasNextLine()) {
-                final String temp = sc.nextLine();
-                lines.add(temp.substring(temp.indexOf(" ") + 1));
+        if (Build.VERSION.SDK_INT >= 23) {
+            if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+                Log.v("value", "Permission is granted");
+                initCaffe();
+            } else {
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, PERMISSION_REQUEST_CODE);
             }
-            IMAGENET_CLASSES = lines.toArray(new String[0]);
-        } catch (IOException e) {
-            e.printStackTrace();
+        } else {
+            // Code for Below 23 API Oriented Device
+            // Do next code
+            initCaffe();
         }
     }
 
